@@ -13,9 +13,11 @@
         #asciiOutput {
             font-family: 'Courier New', monospace;
             white-space: pre;
-            line-height: 1;
-            font-size: 2px;
+            line-height: 0.8;
+            letter-spacing: 0;
             overflow: hidden;
+            transform-origin: top left;
+            color: #4ade80;
         }
     </style>
 </head>
@@ -41,8 +43,8 @@
         <!-- Output Window (ASCII Art) -->
         <div class="flex-1 flex flex-col">
             <h2 class="text-lg font-medium text-gray-200 mb-4 text-center">ASCII Output</h2>
-            <div class="flex-1 bg-gray-800 border-2 border-gray-600 rounded-lg overflow-hidden p-4">
-                <div id="asciiOutput" class="w-full h-full text-green-400 text-xs leading-none overflow-hidden"></div>
+            <div id="asciiContainer" class="flex-1 bg-gray-800 border-2 border-gray-600 rounded-lg overflow-hidden p-2 relative">
+                <div id="asciiOutput" class="absolute top-0 left-0"></div>
             </div>
         </div>
 
@@ -54,6 +56,7 @@
     <script>
         const videoElement = document.getElementById('cameraFeed');
         const asciiOutput = document.getElementById('asciiOutput');
+        const asciiContainer = document.getElementById('asciiContainer');
         const messageBox = document.getElementById('message-box');
         const canvas = document.getElementById('hiddenCanvas');
         const ctx = canvas.getContext('2d');
@@ -74,15 +77,64 @@
             return asciiChars[index];
         }
 
+        // Calculate optimal ASCII dimensions and scaling
+        function calculateOptimalSettings() {
+            const containerRect = asciiContainer.getBoundingClientRect();
+            const availableWidth = containerRect.width - 16; // Account for padding
+            const availableHeight = containerRect.height - 16;
+
+            // Start with a base font size and calculate how many characters fit
+            let fontSize = 8;
+            let charWidth, charHeight;
+            
+            // Create a temporary element to measure character dimensions
+            const tempElement = document.createElement('div');
+            tempElement.style.font = `${fontSize}px Courier New`;
+            tempElement.style.position = 'absolute';
+            tempElement.style.visibility = 'hidden';
+            tempElement.style.whiteSpace = 'pre';
+            tempElement.style.lineHeight = '0.8';
+            tempElement.textContent = 'M';
+            document.body.appendChild(tempElement);
+            
+            const tempRect = tempElement.getBoundingClientRect();
+            charWidth = tempRect.width;
+            charHeight = tempRect.height * 0.8; // Account for line-height
+            
+            document.body.removeChild(tempElement);
+
+            // Calculate how many characters can fit
+            const maxCharsWidth = Math.floor(availableWidth / charWidth);
+            const maxCharsHeight = Math.floor(availableHeight / charHeight);
+
+            // Ensure we have reasonable dimensions
+            const asciiWidth = Math.max(40, Math.min(maxCharsWidth, 120));
+            const asciiHeight = Math.max(20, Math.min(maxCharsHeight, 60));
+
+            // Recalculate font size to perfectly fit the container
+            const fontSizeByWidth = availableWidth / (asciiWidth * 0.6); // 0.6 accounts for character spacing
+            const fontSizeByHeight = availableHeight / (asciiHeight * 0.8); // 0.8 is line-height
+            fontSize = Math.min(fontSizeByWidth, fontSizeByHeight);
+
+            return {
+                asciiWidth,
+                asciiHeight,
+                fontSize: Math.max(fontSize, 3) // Minimum 3px font size
+            };
+        }
+
         // Generate ASCII art from video frame
         function generateAscii() {
             if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+                animationId = requestAnimationFrame(generateAscii);
                 return;
             }
 
-            // Set canvas size based on desired ASCII dimensions
-            const asciiWidth = 120;
-            const asciiHeight = 60;
+            const settings = calculateOptimalSettings();
+            const { asciiWidth, asciiHeight, fontSize } = settings;
+
+            // Apply the calculated font size
+            asciiOutput.style.fontSize = `${fontSize}px`;
             
             canvas.width = asciiWidth;
             canvas.height = asciiHeight;
@@ -107,10 +159,20 @@
                     const gray = rgbToGray(r, g, b);
                     asciiArt += grayToAscii(gray);
                 }
-                asciiArt += '\n';
+                if (y < asciiHeight - 1) asciiArt += '\n';
             }
 
             asciiOutput.textContent = asciiArt;
+            
+            // Center the ASCII art if it doesn't fill the entire space
+            const outputRect = asciiOutput.getBoundingClientRect();
+            const containerRect = asciiContainer.getBoundingClientRect();
+            
+            const offsetX = Math.max(0, (containerRect.width - outputRect.width) / 2);
+            const offsetY = Math.max(0, (containerRect.height - outputRect.height) / 2);
+            
+            asciiOutput.style.left = `${offsetX}px`;
+            asciiOutput.style.top = `${offsetY}px`;
             
             // Continue animation
             animationId = requestAnimationFrame(generateAscii);
@@ -132,7 +194,10 @@
                     
                     // Start ASCII generation when video is ready
                     videoElement.addEventListener('loadedmetadata', () => {
-                        generateAscii();
+                        // Small delay to ensure container dimensions are available
+                        setTimeout(() => {
+                            generateAscii();
+                        }, 100);
                     });
                     
                 } catch (error) {
@@ -154,6 +219,17 @@
                 videoElement.style.display = 'none';
             }
         }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            // Recalculate on resize with a small debounce
+            clearTimeout(window.resizeTimeout);
+            window.resizeTimeout = setTimeout(() => {
+                if (animationId) {
+                    // The next frame will automatically recalculate dimensions
+                }
+            }, 100);
+        });
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
