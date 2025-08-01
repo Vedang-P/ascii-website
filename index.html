@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimalist Camera Feed</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-black text-gray-300 flex flex-col min-h-screen">
+
+    <!-- Header -->
+    <header class="p-6">
+        <h1 class="text-2xl font-medium text-center text-gray-400">Live Feed</h1>
+    </header>
+
+    <!-- Main Content: Two side-by-side windows -->
+    <main class="flex-grow flex flex-col md:flex-row p-4 gap-8 items-center justify-center">
+
+        <!-- Input Window (Camera Feed) -->
+        <div class="flex-1 max-w-3xl flex flex-col items-center">
+            <h2 class="text-sm font-light text-gray-500 mb-2">Input</h2>
+            <div class="w-full bg-black rounded-lg overflow-hidden">
+                <!-- Video element for the camera stream -->
+                <video id="cameraFeed" autoplay playsinline class="w-full h-auto rounded-md transform -scale-x-100"></video>
+            </div>
+            <div id="message-box" class="mt-2 text-center text-red-500 text-sm"></div>
+        </div>
+
+        <!-- Output Window -->
+        <div class="flex-1 max-w-3xl flex flex-col items-center">
+            <h2 class="text-sm font-light text-gray-500 mb-2">Output</h2>
+            <div class="w-full bg-black rounded-lg overflow-hidden">
+                 <!-- Video element for the mirrored output stream -->
+                <video id="outputFeed" autoplay playsinline class="w-full h-auto rounded-md transform -scale-x-100"></video>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const videoElement = document.getElementById('cameraFeed');
+        const outputElement = document.getElementById('outputFeed');
+        const messageBox = document.getElementById('message-box');
+
+        // --- Access Camera ---
+        async function setupCamera() {
+            // Check if the browser supports mediaDevices API
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                try {
+                    // Request access to the user's camera
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: {
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            facingMode: 'user' 
+                        } 
+                    });
+                    // Set the stream for both video elements
+                    videoElement.srcObject = stream;
+                    outputElement.srcObject = stream;
+                } catch (error) {
+                    // Handle errors (e.g., user denies permission)
+                    console.error("Error accessing camera: ", error);
+                    let errorMessage = "Could not access the camera. Please grant permission in your browser.";
+                    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                        errorMessage = "Camera access was denied. Please grant permission to use this feature.";
+                    } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                        errorMessage = "No camera was found on this device.";
+                    }
+                    messageBox.textContent = errorMessage;
+                    // Hide the video elements if camera fails
+                    videoElement.style.display = 'none';
+                    outputElement.style.display = 'none';
+                }
+            } else {
+                console.error("getUserMedia not supported on this browser!");
+                messageBox.textContent = "Sorry, your browser does not support camera access.";
+                videoElement.style.display = 'none';
+                outputElement.style.display = 'none';
+            }
+        }
+
+        // --- Run on page load ---
+        window.addEventListener('load', setupCamera);
+    </script>
+
+</body>
+</html>
