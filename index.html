@@ -3,90 +3,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimalist Camera Feed</title>
+    <title>ASCII Camera Feed</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
         }
+        #asciiOutput {
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            line-height: 1;
+            font-size: 2px;
+            overflow: hidden;
+        }
     </style>
 </head>
-<body class="bg-black text-gray-300 flex flex-col min-h-screen">
+<body class="bg-gray-900 text-gray-100 flex flex-col min-h-screen">
 
     <!-- Header -->
-    <header class="p-6">
-        <h1 class="text-2xl font-medium text-center text-gray-400">Live Feed</h1>
+    <header class="p-6 bg-gray-800 border-b border-gray-700">
+        <h1 class="text-3xl font-semibold text-center text-gray-100">ASCII Camera Feed</h1>
     </header>
 
     <!-- Main Content: Two side-by-side windows -->
-    <main class="flex-grow flex flex-col md:flex-row p-4 gap-8 items-center justify-center">
+    <main class="flex-grow flex flex-col lg:flex-row p-6 gap-6">
 
         <!-- Input Window (Camera Feed) -->
-        <div class="flex-1 max-w-3xl flex flex-col items-center">
-            <h2 class="text-sm font-light text-gray-500 mb-2">Input</h2>
-            <div class="w-full bg-black rounded-lg overflow-hidden">
-                <!-- Video element for the camera stream -->
-                <video id="cameraFeed" autoplay playsinline class="w-full h-auto rounded-md transform -scale-x-100"></video>
+        <div class="flex-1 flex flex-col">
+            <h2 class="text-lg font-medium text-gray-200 mb-4 text-center">Camera Input</h2>
+            <div class="flex-1 bg-gray-800 border-2 border-gray-600 rounded-lg overflow-hidden p-4">
+                <video id="cameraFeed" autoplay playsinline muted class="w-full h-full object-cover rounded-md transform -scale-x-100"></video>
             </div>
-            <div id="message-box" class="mt-2 text-center text-red-500 text-sm"></div>
+            <div id="message-box" class="mt-3 text-center text-red-400 text-sm"></div>
         </div>
 
-        <!-- Output Window -->
-        <div class="flex-1 max-w-3xl flex flex-col items-center">
-            <h2 class="text-sm font-light text-gray-500 mb-2">Output</h2>
-            <div class="w-full bg-black rounded-lg overflow-hidden">
-                 <!-- Video element for the mirrored output stream -->
-                <video id="outputFeed" autoplay playsinline class="w-full h-auto rounded-md transform -scale-x-100"></video>
+        <!-- Output Window (ASCII Art) -->
+        <div class="flex-1 flex flex-col">
+            <h2 class="text-lg font-medium text-gray-200 mb-4 text-center">ASCII Output</h2>
+            <div class="flex-1 bg-gray-800 border-2 border-gray-600 rounded-lg overflow-hidden p-4">
+                <div id="asciiOutput" class="w-full h-full text-green-400 text-xs leading-none overflow-hidden"></div>
             </div>
         </div>
 
     </main>
 
+    <!-- Hidden canvas for processing -->
+    <canvas id="hiddenCanvas" style="display: none;"></canvas>
+
     <script>
         const videoElement = document.getElementById('cameraFeed');
-        const outputElement = document.getElementById('outputFeed');
+        const asciiOutput = document.getElementById('asciiOutput');
         const messageBox = document.getElementById('message-box');
+        const canvas = document.getElementById('hiddenCanvas');
+        const ctx = canvas.getContext('2d');
 
-        // --- Access Camera ---
+        // ASCII characters from darkest to lightest
+        const asciiChars = '@%#*+=-:. ';
+        
+        let animationId;
+
+        // Convert RGB to grayscale
+        function rgbToGray(r, g, b) {
+            return Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+        }
+
+        // Convert grayscale value to ASCII character
+        function grayToAscii(gray) {
+            const index = Math.floor((gray / 255) * (asciiChars.length - 1));
+            return asciiChars[index];
+        }
+
+        // Generate ASCII art from video frame
+        function generateAscii() {
+            if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+                return;
+            }
+
+            // Set canvas size based on desired ASCII dimensions
+            const asciiWidth = 120;
+            const asciiHeight = 60;
+            
+            canvas.width = asciiWidth;
+            canvas.height = asciiHeight;
+
+            // Draw video frame to canvas (scaled down)
+            ctx.drawImage(videoElement, 0, 0, asciiWidth, asciiHeight);
+
+            // Get image data
+            const imageData = ctx.getImageData(0, 0, asciiWidth, asciiHeight);
+            const pixels = imageData.data;
+
+            let asciiArt = '';
+
+            // Convert pixels to ASCII
+            for (let y = 0; y < asciiHeight; y++) {
+                for (let x = 0; x < asciiWidth; x++) {
+                    const index = (y * asciiWidth + x) * 4;
+                    const r = pixels[index];
+                    const g = pixels[index + 1];
+                    const b = pixels[index + 2];
+                    
+                    const gray = rgbToGray(r, g, b);
+                    asciiArt += grayToAscii(gray);
+                }
+                asciiArt += '\n';
+            }
+
+            asciiOutput.textContent = asciiArt;
+            
+            // Continue animation
+            animationId = requestAnimationFrame(generateAscii);
+        }
+
+        // Access Camera
         async function setupCamera() {
-            // Check if the browser supports mediaDevices API
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 try {
-                    // Request access to the user's camera
                     const stream = await navigator.mediaDevices.getUserMedia({ 
                         video: {
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 },
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
                             facingMode: 'user' 
                         } 
                     });
-                    // Set the stream for both video elements
+                    
                     videoElement.srcObject = stream;
-                    outputElement.srcObject = stream;
+                    
+                    // Start ASCII generation when video is ready
+                    videoElement.addEventListener('loadedmetadata', () => {
+                        generateAscii();
+                    });
+                    
                 } catch (error) {
-                    // Handle errors (e.g., user denies permission)
                     console.error("Error accessing camera: ", error);
                     let errorMessage = "Could not access the camera. Please grant permission in your browser.";
+                    
                     if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                         errorMessage = "Camera access was denied. Please grant permission to use this feature.";
                     } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
                         errorMessage = "No camera was found on this device.";
                     }
+                    
                     messageBox.textContent = errorMessage;
-                    // Hide the video elements if camera fails
                     videoElement.style.display = 'none';
-                    outputElement.style.display = 'none';
                 }
             } else {
                 console.error("getUserMedia not supported on this browser!");
                 messageBox.textContent = "Sorry, your browser does not support camera access.";
                 videoElement.style.display = 'none';
-                outputElement.style.display = 'none';
             }
         }
 
-        // --- Run on page load ---
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            if (videoElement.srcObject) {
+                videoElement.srcObject.getTracks().forEach(track => track.stop());
+            }
+        });
+
+        // Run on page load
         window.addEventListener('load', setupCamera);
     </script>
 
